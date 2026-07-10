@@ -1,0 +1,53 @@
+[project]
+name = "auto-forex-aws"
+version = "0.1.0"
+description = "AWS data adapters for AutoForex."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "auto-forex-core",
+    "boto3>=1.34.0",
+    "pydantic-settings>=2.14.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.24,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "aws"
+
+[tool.uv.sources]
+auto-forex-core = { path = "../core", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+    "ty>=0.0.55",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "UP"]
+
+[tool.ruff.format]
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+
+[tool.pytest.ini_options]
+addopts = [
+    "-ra",
+    "--strict-config",
+    "--strict-markers",
+    "--import-mode=importlib",
+]
+testpaths = ["tests"]
+
+[tool.ty.environment]
+python-version = "3.14"
