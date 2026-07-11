@@ -392,9 +392,7 @@ class AthenaDataSource(DataSource):
         chunk_days: int,
         query_builder: Callable[[tuple[datetime | None, datetime | None]], str],
     ) -> Iterable[AthenaQueryExecution]:
-        windows = iter(
-            self._query_windows(start_at=start_at, end_at=end_at, chunk_days=chunk_days)
-        )
+        windows = iter(self._query_windows(start_at=start_at, end_at=end_at, chunk_days=chunk_days))
         try:
             first_window = next(windows)
         except StopIteration:
@@ -684,9 +682,7 @@ class AthenaDataSource(DataSource):
             case CandleGranularity.DAY:
                 return self.settings.day_aggs_table
             case _:
-                raise AthenaDataSourceError(
-                    f"unsupported Athena candle granularity: {granularity}"
-                )
+                raise AthenaDataSourceError(f"unsupported Athena candle granularity: {granularity}")
 
     @staticmethod
     def _ticker_for(instrument: CurrencyPair) -> str:
