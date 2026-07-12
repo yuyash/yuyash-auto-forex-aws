@@ -390,7 +390,7 @@ def test_ticks_prefetch_multiple_daily_queries_before_first_tick() -> None:
     assert "(year = '2026' AND month = '07' AND day = '11')" in query_text
 
 
-def test_adaptive_prefetch_target_tracks_query_and_consumption_speed() -> None:
+def test_prefetch_policy_tracks_query_and_consumption_speed() -> None:
     source = AthenaDataSource(
         settings=AthenaSettings(
             query_prefetch_min_windows=1,
@@ -401,7 +401,7 @@ def test_adaptive_prefetch_target_tracks_query_and_consumption_speed() -> None:
     )
 
     assert (
-        source._adaptive_prefetch_target(
+        source.prefetch_policy.target(
             current_target=2,
             query_elapsed=3.0,
             consumption_elapsed=0.5,
@@ -410,7 +410,7 @@ def test_adaptive_prefetch_target_tracks_query_and_consumption_speed() -> None:
         == 6
     )
     assert (
-        source._adaptive_prefetch_target(
+        source.prefetch_policy.target(
             current_target=2,
             query_elapsed=0.2,
             consumption_elapsed=3.0,
@@ -419,7 +419,7 @@ def test_adaptive_prefetch_target_tracks_query_and_consumption_speed() -> None:
         == 3
     )
     assert (
-        source._adaptive_prefetch_target(
+        source.prefetch_policy.target(
             current_target=4,
             query_elapsed=0.5,
             consumption_elapsed=5.0,

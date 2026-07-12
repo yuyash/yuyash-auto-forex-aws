@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
@@ -15,7 +15,8 @@ from aws.athena_models import AthenaDataSourceError, AthenaQueryExecution
 from aws.athena_prefetch import AthenaPrefetchPolicy, AthenaQueryPrefetcher
 from aws.athena_results import AthenaResultReader
 from aws.athena_settings import AthenaSettings
-from aws.athena_sql import AthenaQueryWindow, AthenaQueryWindowBuilder, AthenaSqlBuilder
+from aws.athena_source_services import AthenaDataQueryService, AthenaSettingsResolver
+from aws.athena_sql import AthenaQueryWindowBuilder, AthenaSqlBuilder
 
 
 class AthenaDataSource(DataSource):
@@ -46,26 +47,28 @@ class AthenaDataSource(DataSource):
         athena_client: Any | None = None,
         s3_client: Any | None = None,
     ) -> None:
-        self.settings = self._resolve_settings(
+        self.settings = AthenaSettingsResolver.resolve(
             settings=settings,
-            profile_name=profile_name,
-            region_name=region_name,
-            account_id=account_id,
-            database=database,
-            table=table,
-            minute_aggs_table=minute_aggs_table,
-            day_aggs_table=day_aggs_table,
-            output_bucket=output_bucket,
-            output_prefix=output_prefix,
-            work_group=work_group,
-            poll_interval_seconds=poll_interval_seconds,
-            timeout_seconds=timeout_seconds,
-            query_chunk_days=query_chunk_days,
-            candle_query_chunk_days=candle_query_chunk_days,
-            query_prefetch_min_windows=query_prefetch_min_windows,
-            query_prefetch_max_windows=query_prefetch_max_windows,
-            query_prefetch_workers=query_prefetch_workers,
-            query_prefetch_wait_target_seconds=query_prefetch_wait_target_seconds,
+            overrides={
+                "profile_name": profile_name,
+                "region_name": region_name,
+                "account_id": account_id,
+                "database": database,
+                "table": table,
+                "minute_aggs_table": minute_aggs_table,
+                "day_aggs_table": day_aggs_table,
+                "output_bucket": output_bucket,
+                "output_prefix": output_prefix,
+                "work_group": work_group,
+                "poll_interval_seconds": poll_interval_seconds,
+                "timeout_seconds": timeout_seconds,
+                "query_chunk_days": query_chunk_days,
+                "candle_query_chunk_days": candle_query_chunk_days,
+                "query_prefetch_min_windows": query_prefetch_min_windows,
+                "query_prefetch_max_windows": query_prefetch_max_windows,
+                "query_prefetch_workers": query_prefetch_workers,
+                "query_prefetch_wait_target_seconds": query_prefetch_wait_target_seconds,
+            },
         )
         self.clients = AthenaAwsClientProvider(
             settings=self.settings,
@@ -83,6 +86,10 @@ class AthenaDataSource(DataSource):
             executor=self.query_executor.execute,
             policy=self.prefetch_policy,
         )
+        self.query_service = AthenaDataQueryService(
+            window_builder=self.window_builder,
+            prefetcher=self.prefetcher,
+        )
 
     @classmethod
     def from_env(cls, **overrides: Any) -> AthenaDataSource:
@@ -97,7 +104,7 @@ class AthenaDataSource(DataSource):
         end_at: datetime | None = None,
     ) -> Iterable[Tick]:
         requested_instrument = CurrencyPair.of(instrument)
-        executions = self._query_executions(
+        executions = self.query_service.executions(
             start_at=start_at,
             end_at=end_at,
             chunk_days=self.settings.query_chunk_days,
@@ -126,7 +133,7 @@ class AthenaDataSource(DataSource):
         """Yield candles from Athena aggregate tables."""
         requested_instrument = CurrencyPair.of(instrument)
         requested_granularity = CandleGranularity(granularity)
-        executions = self._query_executions(
+        executions = self.query_service.executions(
             start_at=start_at,
             end_at=end_at,
             chunk_days=self.settings.candle_query_chunk_days,
@@ -185,47 +192,6 @@ class AthenaDataSource(DataSource):
     def s3_client(self) -> Any:
         """Return the S3 client used to stream Athena result objects."""
         return self.clients.s3
-
-    def _query_executions(
-        self,
-        *,
-        start_at: datetime | None,
-        end_at: datetime | None,
-        chunk_days: int,
-        query_builder: Callable[[AthenaQueryWindow], str],
-    ) -> Iterable[AthenaQueryExecution]:
-        windows = self.window_builder.windows(
-            start_at=start_at,
-            end_at=end_at,
-            chunk_days=chunk_days,
-        )
-        yield from self.prefetcher.executions(windows=windows, query_builder=query_builder)
-
-    def _adaptive_prefetch_target(
-        self,
-        *,
-        current_target: int,
-        query_elapsed: float,
-        consumption_elapsed: float | None,
-        wait_elapsed: float,
-    ) -> int:
-        return self.prefetch_policy.target(
-            current_target=current_target,
-            query_elapsed=query_elapsed,
-            consumption_elapsed=consumption_elapsed,
-            wait_elapsed=wait_elapsed,
-        )
-
-    @classmethod
-    def _resolve_settings(
-        cls,
-        *,
-        settings: AthenaSettings | None,
-        **overrides: Any,
-    ) -> AthenaSettings:
-        resolved = settings or AthenaSettings()
-        updates = {key: value for key, value in overrides.items() if value is not None}
-        return AthenaSettings.model_validate({**resolved.model_dump(), **updates})
 
 
 __all__ = [
